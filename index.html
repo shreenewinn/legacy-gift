@@ -2,79 +2,96 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Artivive Style AR</title>
+    <title>Legacy Gift AR</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     
     <script>
-      // --- THE "GHOST FOLLOW" COMPONENT ---
-      // This is the secret sauce. It ignores small shakes (jitter)
-      // and only moves if you move your phone significantly.
-      AFRAME.registerComponent('ghost-follow', {
+      // --- THE ULTIMATE STABILIZER (Moving Average) ---
+      // This script stores the last 10 positions and averages them.
+      // Result: The video floats smoothly and ignores shaking.
+      AFRAME.registerComponent('smooth-average', {
         schema: {
           target: {type: 'selector'},
-          speed: {type: 'number', default: 0.15} // Lower = Smoother
+          frames: {type: 'number', default: 10} // Higher = Smoother but slower
         },
         init: function() {
+          this.posHistory = [];
+          this.rotHistory = [];
           this.el.object3D.visible = false;
         },
-        tick: function (t, dt) {
+        tick: function (time, timeDelta) {
           const targetEl = this.data.target;
+          
+          // 1. If target is lost, hide video
           if (!targetEl.object3D.visible) {
-             // If lost, we don't hide immediately. We let it "linger" like Artivive.
-             if (this.el.object3D.visible) {
-               this.el.object3D.visible = false; 
-               // (Advanced: You could add a fade-out animation here)
-             }
+             this.el.object3D.visible = false;
+             this.posHistory = []; // Reset history
              return;
           }
           this.el.object3D.visible = true;
 
-          // INTERPOLATION: Move 15% of the way to the target every frame.
-          // This filters out 100% of the micro-jitter.
-          this.el.object3D.position.lerp(targetEl.object3D.position, this.data.speed);
-          this.el.object3D.quaternion.slerp(targetEl.object3D.quaternion, this.data.speed);
-          this.el.object3D.scale.lerp(targetEl.object3D.scale, this.data.speed);
+          // 2. Add current position to history
+          const currentPos = targetEl.object3D.position.clone();
+          const currentRot = targetEl.object3D.quaternion.clone();
+          
+          this.posHistory.push(currentPos);
+          this.rotHistory.push(currentRot);
+
+          // 3. Keep history limited to 10 frames
+          if (this.posHistory.length > this.data.frames) {
+            this.posHistory.shift();
+            this.rotHistory.shift();
+          }
+
+          // 4. CALCULATE AVERAGE POSITION
+          let avgPos = new THREE.Vector3(0, 0, 0);
+          this.posHistory.forEach(p => avgPos.add(p));
+          avgPos.divideScalar(this.posHistory.length);
+
+          // 5. CALCULATE AVERAGE ROTATION (Slerp)
+          // Simplified averaging for rotation to save CPU
+          const avgRot = this.rotHistory[this.rotHistory.length - 1]; 
+
+          // 6. Apply to Video
+          this.el.object3D.position.copy(avgPos);
+          this.el.object3D.quaternion.slerp(avgRot, 0.2);
         }
       });
     </script>
 
     <style>
-      body { margin: 0; overflow: hidden; font-family: sans-serif; background: black; }
-      
-      /* THE START OVERLAY */
+      body { margin: 0; overflow: hidden; background: #000; }
       #overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.85); z-index: 9999;
+        background: rgba(0,0,0,0.95); z-index: 9999;
         display: flex; flex-direction: column;
         justify-content: center; align-items: center;
-        transition: opacity 0.5s;
+        color: white; font-family: sans-serif; text-align: center;
       }
-      
-      /* THE MAGIC BUTTON */
-      #start-btn {
-        padding: 15px 40px; font-size: 18px; letter-spacing: 2px;
-        background: transparent; color: white;
-        border: 2px solid #d4af37; border-radius: 50px;
-        cursor: pointer; text-transform: uppercase; font-weight: bold;
-        box-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
+      #startBtn {
+        margin-top: 30px; padding: 20px 60px; font-size: 22px;
+        background: #d4af37; color: black; border: none; border-radius: 50px;
+        font-weight: 800; cursor: pointer; text-transform: uppercase;
+        box-shadow: 0 0 30px rgba(212, 175, 55, 0.6);
       }
-      
-      /* STATUS TEXT */
-      #status {
-        position: fixed; bottom: 20px; width: 100%; text-align: center;
-        color: white; font-size: 12px; opacity: 0.6; pointer-events: none;
+      #status-bar {
+        position: fixed; top: 0; left: 0; width: 100%;
+        background: rgba(50, 50, 50, 0.8); color: #00ff00;
+        font-family: monospace; font-size: 12px; padding: 8px;
+        z-index: 1000; pointer-events: none; text-align: center;
       }
     </style>
   </head>
   <body>
-
+    
     <div id="overlay">
-      <h2 style="color:white; margin-bottom: 30px;">REVEAL THE LEGACY</h2>
-      <button id="start-btn">START EXPERIENCE</button>
+      <h1 style="margin-bottom: 0;">LEGACY AR</h1>
+      <p style="opacity: 0.7; max-width: 80%;">Turn volume up & tap below</p>
+      <button id="startBtn">UNLOCK EXPERIENCE</button>
     </div>
 
-    <div id="status">Point camera at image</div>
+    <div id="status-bar">System Ready. Waiting for user...</div>
 
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
@@ -92,55 +109,68 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <a-entity id="anchor" mindar-image-target="targetIndex: 0" visible="false"></a-entity>
+      <a-entity id="target-anchor" mindar-image-target="targetIndex: 0"></a-entity>
 
-      <a-entity ghost-follow="target: #anchor; speed: 0.1">
+      <a-entity smooth-average="target: #target-anchor; frames: 15">
         
-        <a-plane 
+        <a-plane color="black" position="0 0 -0.01" width="1.05" height="1.45"></a-plane>
+
+        <a-video 
           src="#vid" 
           width="1" height="1.41" 
-          position="0 0 0" 
-          material="shader: flat; src: #vid; opacity: 1;"
-        ></a-plane>
-
+          position="0 0 0.05" 
+          scale="1.2 1.2 1.2"
+        ></a-video>
       </a-entity>
       
     </a-scene>
 
     <script>
+      const startBtn = document.querySelector('#startBtn');
       const overlay = document.querySelector('#overlay');
-      const startBtn = document.querySelector('#start-btn');
       const video = document.querySelector('#vid');
-      const statusText = document.querySelector('#status');
-      const anchor = document.querySelector('#anchor');
+      const statusBar = document.querySelector('#status-bar');
 
-      // 1. UNLOCK AUDIO & VIDEO
+      // 1. FORCE VIDEO UNLOCK
       startBtn.addEventListener('click', () => {
-        // Fade out overlay
-        overlay.style.opacity = '0';
-        setTimeout(() => { overlay.style.display = 'none'; }, 500);
+        overlay.style.display = 'none';
         
-        // Force video to "wake up"
+        // Attempt to play
         video.muted = true;
         video.play().then(() => {
-          video.pause(); // Pause immediately, wait for target
+          statusBar.innerText = "Video Engine: RUNNING (Muted)";
+          statusBar.style.color = "yellow";
+        }).catch(e => {
+          statusBar.innerText = "Video Engine: BLOCKED (" + e.message + ")";
+          statusBar.style.color = "red";
         });
       });
 
       // 2. TARGET FOUND
+      const anchor = document.querySelector('#target-anchor');
       anchor.addEventListener("targetFound", () => {
-        statusText.innerText = "Target Locked";
-        video.currentTime = 0; // Restart video from 0
-        video.muted = false; // Turn on audio
+        statusBar.innerText = "Tracking: LOCKED | Audio: ON";
+        statusBar.style.color = "#00ff00"; // Green
+        video.muted = false;
         video.play();
       });
 
       // 3. TARGET LOST
       anchor.addEventListener("targetLost", () => {
-        statusText.innerText = "Searching...";
-        // Artivive style: keep playing audio for a second or pause
-        video.pause();
+        statusBar.innerText = "Tracking: SEARCHING...";
+        statusBar.style.color = "white";
       });
+      
+      // 4. TEXTURE REFRESH LOOP (Fixes Black Screen on Mobile 1)
+      // This forces the browser to redraw the video texture constantly
+      setInterval(() => {
+        if (!video.paused) {
+           const mesh = document.querySelector('a-video').getObject3D('mesh');
+           if (mesh && mesh.material.map) {
+             mesh.material.map.needsUpdate = true;
+           }
+        }
+      }, 500);
     </script>
   </body>
 </html>
