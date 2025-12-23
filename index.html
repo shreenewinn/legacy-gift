@@ -7,30 +7,24 @@
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     
     <script>
-      // --- CUSTOM COMPONENT: ZERO JITTER (LERP) ---
+      // COMPONENT: SMOOTH FOLLOW (Zero Jitter)
       AFRAME.registerComponent('smooth-follow', {
         schema: {
           target: {type: 'selector'},
           speed: {type: 'number', default: 0.1}
         },
         init: function() {
-          this.el.object3D.visible = false; // Hide initially
+          this.el.object3D.visible = false;
         },
         tick: function (time, timeDelta) {
           const targetEl = this.data.target;
-          
-          // Logic: If target is NOT visible, hide video and stop tracking
           if (!targetEl.object3D.visible) {
              this.el.object3D.visible = false;
              return;
           }
-          
-          // Logic: If target IS visible, show video and smooth follow
           this.el.object3D.visible = true;
-          const targetPos = targetEl.object3D.position;
-          const targetRot = targetEl.object3D.quaternion;
-          this.el.object3D.position.lerp(targetPos, this.data.speed);
-          this.el.object3D.quaternion.slerp(targetRot, this.data.speed);
+          this.el.object3D.position.lerp(targetEl.object3D.position, this.data.speed);
+          this.el.object3D.quaternion.slerp(targetEl.object3D.quaternion, this.data.speed);
         }
       });
     </script>
@@ -47,11 +41,12 @@
         margin-top: 20px; padding: 15px 40px; font-size: 18px;
         background: #d4af37; color: black; border: none; border-radius: 30px;
         font-weight: bold; cursor: pointer;
-        box-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
       }
-      #status {
+      /* DEBUG STATUS BAR (Yellow Text) */
+      #debug-console {
         position: fixed; top: 10px; left: 10px; color: yellow; z-index: 999; 
-        font-family: monospace; font-size: 12px; pointer-events: none;
+        font-family: monospace; font-size: 14px; background: rgba(0,0,0,0.5);
+        padding: 5px; pointer-events: none;
       }
     </style>
   </head>
@@ -59,11 +54,10 @@
     
     <div id="overlay">
       <h2>Unlock the Legacy</h2>
-      <p style="font-size: 14px; opacity: 0.7;">Make sure volume is UP</p>
       <button id="startBtn">START EXPERIENCE</button>
     </div>
 
-    <div id="status">Waiting for start...</div>
+    <div id="debug-console">Status: Waiting...</div>
 
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
@@ -75,7 +69,7 @@
       <a-assets>
         <video id="vid" src="./magic-video.mp4" 
                preload="auto" loop="true" 
-               playsinline webkit-playsinline 
+               playsinline webkit-playsinline muted 
                crossorigin="anonymous"></video>
       </a-assets>
 
@@ -90,6 +84,7 @@
           height="1.41" 
           position="0 0 0.05"
           scale="1.2 1.2 1.2"
+          material="shader: flat; src: #vid; transparent: true;"
         ></a-video>
       </a-entity>
       
@@ -99,32 +94,46 @@
       const startBtn = document.querySelector('#startBtn');
       const overlay = document.querySelector('#overlay');
       const video = document.querySelector('#vid');
-      const statusText = document.querySelector('#status');
+      const debugText = document.querySelector('#debug-console');
 
-      // 1. START BUTTON CLICK (The most important part)
+      // --- LOGIC: FORCE VIDEO TO PLAY ---
+      
+      function updateDebug() {
+        // This updates the yellow text so you know what is happening
+        const state = video.readyState === 4 ? "Ready" : "Loading";
+        const playing = !video.paused ? "Playing" : "Paused";
+        const time = Math.floor(video.currentTime);
+        debugText.innerText = `Vid: ${state} | ${playing} | Time: ${time}s`;
+        requestAnimationFrame(updateDebug);
+      }
+
       startBtn.addEventListener('click', () => {
         overlay.style.display = 'none';
         
-        // Force play IMMEDIATELY. Do not wait for target.
-        video.muted = false; // Try to unmute
-        video.play().then(() => {
-          statusText.innerText = "Video Playing (Background)";
-        }).catch((e) => {
-          // If unmute fails, try muted play
-          statusText.innerText = "Autoplay blocked. Trying muted.";
-          video.muted = true;
-          video.play();
-        });
+        // 1. Force Play MUTED first (Highest success rate)
+        video.muted = true; 
+        
+        const playPromise = video.play();
+
+        if (playPromise !== undefined) {
+          playPromise.then(_ => {
+            console.log("Autoplay started!");
+            updateDebug(); // Start the status monitor
+          })
+          .catch(error => {
+            console.log("Autoplay blocked:", error);
+            debugText.innerText = "Error: Video Blocked by Phone";
+          });
+        }
       });
 
-      // 2. DEBUG LOGGING (Just so you know it's working)
+      // 2. TARGET FOUND LOGIC
       const anchor = document.querySelector('#target-anchor');
       anchor.addEventListener("targetFound", event => {
-        statusText.innerText = "Target Found: Visible";
+        // Only NOW do we try to turn on sound
+        video.muted = false; 
       });
-      anchor.addEventListener("targetLost", event => {
-        statusText.innerText = "Target Lost: Hidden";
-      });
+      
     </script>
   </body>
 </html>
