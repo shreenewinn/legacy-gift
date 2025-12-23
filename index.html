@@ -6,77 +6,94 @@
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     <style>
-      /* Style for the "Tap to Start" overlay */
-      #overlay {
+      /* 1. The Start Button Overlay */
+      #start-overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.85); z-index: 9999;
+        background: rgba(0,0,0,0.85); z-index: 999;
         display: flex; flex-direction: column;
         justify-content: center; align-items: center;
-        color: white; font-family: 'Arial', sans-serif; text-align: center;
+        color: white; font-family: sans-serif;
       }
-      #startBtn {
-        margin-top: 20px; padding: 15px 40px; font-size: 18px;
-        background: #d4af37; /* Gold color */
-        color: black; border: none; border-radius: 30px;
-        font-weight: bold; cursor: pointer; text-transform: uppercase;
-        box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
+      .btn {
+        padding: 15px 30px; font-size: 18px; background: #d4af37; color: black;
+        border: none; border-radius: 30px; font-weight: bold; cursor: pointer;
+        margin-top: 20px;
+      }
+
+      /* 2. The "Cinema Mode" Video Player (Hidden by default) */
+      #cinema-overlay {
+        display: none; /* Hidden until target is found */
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: black; z-index: 888;
+        justify-content: center; align-items: center;
+      }
+      #cinema-video {
+        width: 100%; max-width: 800px; /* Limits width on tablets */
+        box-shadow: 0 0 50px rgba(212, 175, 55, 0.5); /* Gold Glow */
+      }
+      #close-btn {
+        position: absolute; top: 20px; right: 20px;
+        background: rgba(255,255,255,0.3); color: white;
+        border: none; padding: 10px 20px; border-radius: 20px;
+        font-weight: bold; cursor: pointer;
       }
     </style>
   </head>
   <body>
-    <div id="overlay">
-      <h2 style="margin:0;">Unlock the Legacy</h2>
-      <p style="margin-top:10px; opacity: 0.8;">Tap below to reveal the magic</p>
-      <button id="startBtn">START EXPERIENCE</button>
+
+    <div id="start-overlay">
+      <h2>Unlock the Legacy</h2>
+      <button class="btn" id="startBtn">START EXPERIENCE</button>
+    </div>
+
+    <div id="cinema-overlay">
+      <button id="close-btn">CLOSE X</button>
+      <video id="cinema-video" playsinline webkit-playsinline controls>
+        <source src="./magic-video.mp4" type="video/mp4">
+      </video>
     </div>
 
     <a-scene 
-      mindar-image="imageTargetSrc: ./targets.mind; uiScanning: no;" 
+      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
       color-space="sRGB" 
       renderer="colorManagement: true, physicallyCorrectLights" 
       vr-mode-ui="enabled: false" 
       device-orientation-permission-ui="enabled: false">
       
-      <a-assets>
-        <video id="vid" src="./magic-video.mp4" 
-               preload="auto" loop="true" 
-               playsinline webkit-playsinline muted 
-               crossorigin="anonymous"></video>
-      </a-assets>
-
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <a-entity mindar-image-target="targetIndex: 0">
-        
-        <a-video src="#vid" width="1" height="1.41" position="0 0 0" rotation="0 0 0"></a-video>
-        
-      </a-entity>
+      <a-entity mindar-image-target="targetIndex: 0"></a-entity>
     </a-scene>
 
     <script>
       const startBtn = document.querySelector('#startBtn');
-      const overlay = document.querySelector('#overlay');
-      const video = document.querySelector('#vid');
+      const startOverlay = document.querySelector('#start-overlay');
+      const cinemaOverlay = document.querySelector('#cinema-overlay');
+      const cinemaVideo = document.querySelector('#cinema-video');
+      const closeBtn = document.querySelector('#close-btn');
 
-      // 1. USER INTERACTION: This unlocks the video capability on mobile
+      // 1. User taps start (Required for Mobile Audio)
       startBtn.addEventListener('click', () => {
-        overlay.style.display = 'none'; // Hide the button
-        video.play(); // Start playing
-        video.pause(); // Pause immediately (it will start when image is found)
+        startOverlay.style.display = 'none';
       });
 
-      // 2. AR EVENTS: Play video only when image is seen
+      // 2. Target Found -> Switch to Cinema Mode
       const target = document.querySelector('[mindar-image-target]');
-      
       target.addEventListener("targetFound", event => {
-        console.log("Image Found - Playing Video");
-        video.muted = false; // Unmute sound if you want audio!
-        video.play();
+        console.log("Target Found - Locking Video");
+        
+        // Show the full screen player
+        cinemaOverlay.style.display = 'flex';
+        
+        // Play the video
+        cinemaVideo.currentTime = 0;
+        cinemaVideo.play();
       });
 
-      target.addEventListener("targetLost", event => {
-        console.log("Image Lost - Pausing Video");
-        video.pause();
+      // 3. Close Button -> Go back to Camera
+      closeBtn.addEventListener('click', () => {
+        cinemaOverlay.style.display = 'none';
+        cinemaVideo.pause();
       });
     </script>
   </body>
