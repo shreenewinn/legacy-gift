@@ -7,74 +7,91 @@
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     
     <script>
-      // --- ADVANCED COMPONENT: CANVAS BRIDGE ---
-      // This forces the video to render via a 2D Canvas. 
-      // It solves the "Black Screen" bug on mobile.
-      AFRAME.registerComponent('canvas-video-material', {
-        schema: { src: {type: 'selector'} },
-        init: function() {
-          this.video = this.data.src;
-          
-          // 1. Create a virtual Canvas
-          this.canvas = document.createElement('canvas');
-          this.canvas.width = 1024; // High Res
-          this.canvas.height = 1024;
-          this.ctx = this.canvas.getContext('2d');
-          
-          // 2. Create the Texture from Canvas
-          this.texture = new THREE.CanvasTexture(this.canvas);
-          this.texture.encoding = THREE.sRGBEncoding;
-          
-          // 3. Apply to the 3D Mesh
-          const mesh = this.el.getObject3D('mesh');
-          if (mesh) {
-            mesh.material = new THREE.MeshBasicMaterial({
-              map: this.texture,
-              transparent: true,
-              opacity: 1
-            });
-          }
+      // --- THE ULTIMATE STABILIZER (Moving Average) ---
+      // This script stores the last 10 positions and averages them.
+      // Result: The video floats smoothly and ignores shaking.
+      AFRAME.registerComponent('smooth-average', {
+        schema: {
+          target: {type: 'selector'},
+          frames: {type: 'number', default: 10} // Higher = Smoother but slower
         },
-        tick: function() {
-          // 4. THE LOOP: Paint video to canvas every frame
-          if (this.video.readyState === this.video.HAVE_ENOUGH_DATA && !this.video.paused) {
-            this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
-            this.texture.needsUpdate = true; // Tell GPU to refresh
+        init: function() {
+          this.posHistory = [];
+          this.rotHistory = [];
+          this.el.object3D.visible = false;
+        },
+        tick: function (time, timeDelta) {
+          const targetEl = this.data.target;
+          
+          // 1. If target is lost, hide video
+          if (!targetEl.object3D.visible) {
+             this.el.object3D.visible = false;
+             this.posHistory = []; // Reset history
+             return;
           }
+          this.el.object3D.visible = true;
+
+          // 2. Add current position to history
+          const currentPos = targetEl.object3D.position.clone();
+          const currentRot = targetEl.object3D.quaternion.clone();
+          
+          this.posHistory.push(currentPos);
+          this.rotHistory.push(currentRot);
+
+          // 3. Keep history limited to 10 frames
+          if (this.posHistory.length > this.data.frames) {
+            this.posHistory.shift();
+            this.rotHistory.shift();
+          }
+
+          // 4. CALCULATE AVERAGE POSITION
+          let avgPos = new THREE.Vector3(0, 0, 0);
+          this.posHistory.forEach(p => avgPos.add(p));
+          avgPos.divideScalar(this.posHistory.length);
+
+          // 5. CALCULATE AVERAGE ROTATION (Slerp)
+          // Simplified averaging for rotation to save CPU
+          const avgRot = this.rotHistory[this.rotHistory.length - 1]; 
+
+          // 6. Apply to Video
+          this.el.object3D.position.copy(avgPos);
+          this.el.object3D.quaternion.slerp(avgRot, 0.2);
         }
       });
     </script>
 
     <style>
-      body { margin: 0; overflow: hidden; font-family: sans-serif; background: black; }
+      body { margin: 0; overflow: hidden; background: #000; }
       #overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.9); z-index: 9999;
+        background: rgba(0,0,0,0.95); z-index: 9999;
         display: flex; flex-direction: column;
         justify-content: center; align-items: center;
-        color: white; text-align: center;
+        color: white; font-family: sans-serif; text-align: center;
       }
       #startBtn {
-        margin-top: 30px; padding: 15px 50px; font-size: 20px;
+        margin-top: 30px; padding: 20px 60px; font-size: 22px;
         background: #d4af37; color: black; border: none; border-radius: 50px;
-        font-weight: bold; cursor: pointer;
+        font-weight: 800; cursor: pointer; text-transform: uppercase;
+        box-shadow: 0 0 30px rgba(212, 175, 55, 0.6);
       }
-      #console-ui {
-        position: fixed; top: 0; left: 0; width: 100%; 
-        background: rgba(0,0,0,0.5); color: #00ff00; 
-        font-family: monospace; font-size: 14px; padding: 5px;
-        z-index: 1000; pointer-events: none;
+      #status-bar {
+        position: fixed; top: 0; left: 0; width: 100%;
+        background: rgba(50, 50, 50, 0.8); color: #00ff00;
+        font-family: monospace; font-size: 12px; padding: 8px;
+        z-index: 1000; pointer-events: none; text-align: center;
       }
     </style>
   </head>
   <body>
     
     <div id="overlay">
-      <h2>PRESIDENT'S OFFICE</h2>
-      <button id="startBtn">INITIALIZE SYSTEM</button>
+      <h1 style="margin-bottom: 0;">LEGACY AR</h1>
+      <p style="opacity: 0.7; max-width: 80%;">Turn volume up & tap below</p>
+      <button id="startBtn">UNLOCK EXPERIENCE</button>
     </div>
 
-    <div id="console-ui">System Ready...</div>
+    <div id="status-bar">System Ready. Waiting for user...</div>
 
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
@@ -92,17 +109,18 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <a-entity mindar-image-target="targetIndex: 0">
-        
-        <a-plane color="red" position="0 0 -0.01" width="1.1" height="1.5"></a-plane>
+      <a-entity id="target-anchor" mindar-image-target="targetIndex: 0"></a-entity>
 
-        <a-plane 
-          canvas-video-material="src: #vid"
+      <a-entity smooth-average="target: #target-anchor; frames: 15">
+        
+        <a-plane color="black" position="0 0 -0.01" width="1.05" height="1.45"></a-plane>
+
+        <a-video 
+          src="#vid" 
           width="1" height="1.41" 
           position="0 0 0.05" 
           scale="1.2 1.2 1.2"
-        ></a-plane>
-
+        ></a-video>
       </a-entity>
       
     </a-scene>
@@ -111,33 +129,48 @@
       const startBtn = document.querySelector('#startBtn');
       const overlay = document.querySelector('#overlay');
       const video = document.querySelector('#vid');
-      const logUI = document.querySelector('#console-ui');
+      const statusBar = document.querySelector('#status-bar');
 
-      function updateLog() {
-         const time = Math.floor(video.currentTime);
-         const w = video.videoWidth;
-         // If width is 0, the video file is corrupt/unreadable
-         logUI.innerText = `Time: ${time}s | Res: ${w}x${video.videoHeight}`;
-         requestAnimationFrame(updateLog);
-      }
-
+      // 1. FORCE VIDEO UNLOCK
       startBtn.addEventListener('click', () => {
         overlay.style.display = 'none';
         
-        // Force Play
+        // Attempt to play
         video.muted = true;
         video.play().then(() => {
-          updateLog();
+          statusBar.innerText = "Video Engine: RUNNING (Muted)";
+          statusBar.style.color = "yellow";
         }).catch(e => {
-          logUI.innerText = "Error: " + e.message;
+          statusBar.innerText = "Video Engine: BLOCKED (" + e.message + ")";
+          statusBar.style.color = "red";
         });
       });
 
-      // Unmute when found
-      const target = document.querySelector('[mindar-image-target]');
-      target.addEventListener("targetFound", () => {
+      // 2. TARGET FOUND
+      const anchor = document.querySelector('#target-anchor');
+      anchor.addEventListener("targetFound", () => {
+        statusBar.innerText = "Tracking: LOCKED | Audio: ON";
+        statusBar.style.color = "#00ff00"; // Green
         video.muted = false;
+        video.play();
       });
+
+      // 3. TARGET LOST
+      anchor.addEventListener("targetLost", () => {
+        statusBar.innerText = "Tracking: SEARCHING...";
+        statusBar.style.color = "white";
+      });
+      
+      // 4. TEXTURE REFRESH LOOP (Fixes Black Screen on Mobile 1)
+      // This forces the browser to redraw the video texture constantly
+      setInterval(() => {
+        if (!video.paused) {
+           const mesh = document.querySelector('a-video').getObject3D('mesh');
+           if (mesh && mesh.material.map) {
+             mesh.material.map.needsUpdate = true;
+           }
+        }
+      }, 500);
     </script>
   </body>
 </html>
