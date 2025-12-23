@@ -2,13 +2,36 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>The Infinite Legacy</title>
+    <title>SAS Infra Legacy</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+      /* Style for the "Tap to Start" overlay */
+      #overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.85); z-index: 9999;
+        display: flex; flex-direction: column;
+        justify-content: center; align-items: center;
+        color: white; font-family: 'Arial', sans-serif; text-align: center;
+      }
+      #startBtn {
+        margin-top: 20px; padding: 15px 40px; font-size: 18px;
+        background: #d4af37; /* Gold color */
+        color: black; border: none; border-radius: 30px;
+        font-weight: bold; cursor: pointer; text-transform: uppercase;
+        box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
+      }
+    </style>
   </head>
   <body>
+    <div id="overlay">
+      <h2 style="margin:0;">Unlock the Legacy</h2>
+      <p style="margin-top:10px; opacity: 0.8;">Tap below to reveal the magic</p>
+      <button id="startBtn">START EXPERIENCE</button>
+    </div>
+
     <a-scene 
-      mindar-image="imageTargetSrc: ./targets.mind;" 
+      mindar-image="imageTargetSrc: ./targets.mind; uiScanning: no;" 
       color-space="sRGB" 
       renderer="colorManagement: true, physicallyCorrectLights" 
       vr-mode-ui="enabled: false" 
@@ -16,49 +39,43 @@
       
       <a-assets>
         <video id="vid" src="./magic-video.mp4" 
-               preload="auto" 
-               loop="true" 
-               playsinline 
-               webkit-playsinline 
-               muted 
+               preload="auto" loop="true" 
+               playsinline webkit-playsinline muted 
                crossorigin="anonymous"></video>
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <a-entity mindar-image-target="targetIndex: 0">
-        <a-video src="#vid" width="1" height="1.4" position="0 0 0" rotation="0 0 0"></a-video>
+        
+        <a-video src="#vid" width="1" height="1.41" position="0 0 0" rotation="0 0 0"></a-video>
+        
       </a-entity>
     </a-scene>
-
-    <div id="overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: flex; justify-content: center; align-items: center; flex-direction: column; color: white; font-family: sans-serif;">
-      <h2>Secret Santa Gift</h2>
-      <p>Tap below to unlock</p>
-      <button id="startBtn" style="margin-top:20px; padding: 15px 40px; font-size: 20px; background: #D4AF37; color: black; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">
-        START EXPERIENCE
-      </button>
-    </div>
 
     <script>
       const startBtn = document.querySelector('#startBtn');
       const overlay = document.querySelector('#overlay');
       const video = document.querySelector('#vid');
 
-      // FIX 3: Force video to play on user click (Mobile Requirement)
+      // 1. USER INTERACTION: This unlocks the video capability on mobile
       startBtn.addEventListener('click', () => {
-        overlay.style.display = 'none';
-        video.muted = false; // Unmute after interaction
+        overlay.style.display = 'none'; // Hide the button
+        video.play(); // Start playing
+        video.pause(); // Pause immediately (it will start when image is found)
+      });
+
+      // 2. AR EVENTS: Play video only when image is seen
+      const target = document.querySelector('[mindar-image-target]');
+      
+      target.addEventListener("targetFound", event => {
+        console.log("Image Found - Playing Video");
+        video.muted = false; // Unmute sound if you want audio!
         video.play();
       });
 
-      // Optional: Auto-play when target is found (if already clicked)
-      const target = document.querySelector('[mindar-image-target]');
-      target.addEventListener("targetFound", event => {
-        console.log("Target Found");
-        video.play();
-      });
       target.addEventListener("targetLost", event => {
-        console.log("Target Lost");
+        console.log("Image Lost - Pausing Video");
         video.pause();
       });
     </script>
