@@ -5,11 +5,42 @@
     <title>SAS Infra Legacy</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    
+    <script>
+      // --- CUSTOM COMPONENT: THE SHOCK ABSORBER (LERP) ---
+      // This script forces the video to "slide" to the target position
+      // instead of jumping to it. This kills 100% of vibration.
+      AFRAME.registerComponent('smooth-follow', {
+        schema: {
+          target: {type: 'selector'},
+          speed: {type: 'number', default: 0.1} // Lower = Smoother (more "heavy")
+        },
+        tick: function (time, timeDelta) {
+          const targetEl = this.data.target;
+          if (!targetEl.object3D.visible) {
+             this.el.object3D.visible = false;
+             return;
+          }
+          this.el.object3D.visible = true;
+
+          // 1. GET TARGET POSITION (JITTERY)
+          const targetPos = targetEl.object3D.position;
+          const targetRot = targetEl.object3D.quaternion;
+          
+          // 2. LERP POSITION (SMOOTH MOVE)
+          // "Move 10% of the way there every frame"
+          this.el.object3D.position.lerp(targetPos, this.data.speed);
+          
+          // 3. SLERP ROTATION (SMOOTH ROTATE)
+          this.el.object3D.quaternion.slerp(targetRot, this.data.speed);
+        }
+      });
+    </script>
+
     <style>
-      /* Tap to Start Overlay (Required for Mobile) */
       #overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.85); z-index: 9999;
+        background: rgba(0,0,0,0.9); z-index: 9999;
         display: flex; flex-direction: column;
         justify-content: center; align-items: center;
         color: white; font-family: sans-serif;
@@ -18,10 +49,12 @@
         margin-top: 20px; padding: 15px 40px; font-size: 18px;
         background: #d4af37; color: black; border: none; border-radius: 30px;
         font-weight: bold; cursor: pointer;
+        box-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
       }
     </style>
   </head>
   <body>
+    
     <div id="overlay">
       <h2>Unlock the Legacy</h2>
       <button id="startBtn">START EXPERIENCE</button>
@@ -43,17 +76,18 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <a-entity mindar-image-target="targetIndex: 0">
-        
+      <a-entity id="target-anchor" mindar-image-target="targetIndex: 0"></a-entity>
+
+      <a-entity smooth-follow="target: #target-anchor; speed: 0.1">
         <a-video 
           src="#vid" 
           width="1" 
           height="1.41" 
-          position="0 0 0.1" 
-          scale="1.5 1.5 1.5"
+          position="0 0 0.05"
+          scale="1.2 1.2 1.2"
         ></a-video>
-        
       </a-entity>
+      
     </a-scene>
 
     <script>
@@ -61,18 +95,22 @@
       const overlay = document.querySelector('#overlay');
       const video = document.querySelector('#vid');
 
+      // Mobile Audio Unlock
       startBtn.addEventListener('click', () => {
         overlay.style.display = 'none';
         video.play();
         video.pause();
       });
 
-      const target = document.querySelector('[mindar-image-target]');
-      target.addEventListener("targetFound", event => {
+      // Play/Pause Logic
+      const anchor = document.querySelector('#target-anchor');
+      anchor.addEventListener("targetFound", event => {
+        console.log("Found");
         video.muted = false;
         video.play();
       });
-      target.addEventListener("targetLost", event => {
+      anchor.addEventListener("targetLost", event => {
+        console.log("Lost");
         video.pause();
       });
     </script>
