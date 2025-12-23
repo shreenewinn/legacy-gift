@@ -2,161 +2,158 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Legacy Gift AR</title>
+    <title>Artivive Clone</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     
-    <style>
-      body { margin: 0; font-family: sans-serif; overflow: hidden; background: black; }
+    <script>
+      // --- THE "ARTIVIVE" PHYSICS ENGINE ---
+      // This script creates that "Premium Smoothness" you want.
+      // It separates the video from the jittery camera.
       
-      /* UI: THE SCANNER GUIDE */
-      #scan-ui {
+      AFRAME.registerComponent('artivive-smooth', {
+        schema: {
+          target: {type: 'selector'},
+          friction: {type: 'number', default: 0.1} // 0.1 = Heavy/Smooth, 1.0 = Instant/Jittery
+        },
+        init: function() {
+          this.el.object3D.visible = false;
+          this.isPlaying = false;
+        },
+        tick: function (t, dt) {
+          const targetEl = this.data.target;
+          const targetObj = targetEl.object3D;
+          const myObj = this.el.object3D;
+
+          // 1. VISIBILITY LOGIC (Prevents flickering)
+          if (!targetObj.visible) {
+             if (this.isPlaying) {
+               // If lost, slowly fade out or hide (here we hide for simplicity)
+               myObj.visible = false;
+             }
+             return;
+          }
+          
+          // If found, show it
+          myObj.visible = true;
+
+          // 2. THE "BUTTER" MATH (Linear Interpolation)
+          // Instead of snapping to position, we "slide" towards it.
+          // This kills 100% of the jitter because micro-shakes are ignored.
+          
+          // Move Position
+          myObj.position.lerp(targetObj.position, this.data.friction);
+          
+          // Move Rotation
+          myObj.quaternion.slerp(targetObj.quaternion, this.data.friction);
+          
+          // Move Scale (If you zoom in/out)
+          myObj.scale.lerp(targetObj.scale, this.data.friction);
+        }
+      });
+    </script>
+
+    <style>
+      body { margin: 0; overflow: hidden; font-family: 'Helvetica', sans-serif; background: black; }
+      
+      /* UI: START OVERLAY */
+      #start-screen {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        z-index: 10; pointer-events: none;
+        background: rgba(0,0,0,0.9); z-index: 9999;
         display: flex; flex-direction: column;
         justify-content: center; align-items: center;
+        transition: opacity 0.5s;
       }
-      .scanner-box {
-        width: 70vw; height: 100vw; /* Roughly A4 Aspect Ratio */
-        border: 2px solid rgba(255, 255, 255, 0.5);
-        border-radius: 10px;
-        box-shadow: 0 0 50px rgba(0,0,0,0.5);
-      }
-      .scanner-text {
-        margin-top: 20px; color: white; letter-spacing: 2px; font-size: 12px; opacity: 0.8;
-      }
-
-      /* UI: THE 'FOUND' BUTTON (Crucial for playing video) */
-      #found-btn {
-        display: none; /* Hidden until target found */
-        position: absolute; z-index: 999;
-        top: 50%; left: 50%; transform: translate(-50%, -50%);
-        background: linear-gradient(45deg, #d4af37, #f7e6ad);
-        padding: 20px 50px; border-radius: 50px;
-        box-shadow: 0 0 40px rgba(212, 175, 55, 0.8);
-        cursor: pointer; text-align: center;
-        animation: pulse 2s infinite;
-      }
-      #found-btn h2 { margin: 0; color: black; font-size: 18px; font-weight: 800; }
-      #found-btn p { margin: 0; color: #444; font-size: 12px; }
-
-      /* UI: THE VIDEO PLAYER (Zero Jitter Mode) */
-      #cinema-mode {
-        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: black; z-index: 1000;
-        justify-content: center; align-items: center; flex-direction: column;
+      #start-btn {
+        padding: 15px 40px; font-size: 18px; letter-spacing: 2px;
+        background: transparent; color: white;
+        border: 2px solid white; border-radius: 50px;
+        cursor: pointer; text-transform: uppercase;
       }
       
-      #cinema-video {
-        /* This ensures the video fits the screen width perfectly */
-        width: 100%; 
-        max-width: 600px;
-        /* Matches A4 Paper Ratio (1 : 1.41) */
-        aspect-ratio: 1 / 1.41; 
-        object-fit: cover;
-        box-shadow: 0 0 20px rgba(255,255,255,0.1);
+      /* UI: LOADING SPINNER */
+      .loader {
+        border: 4px solid #f3f3f3; border-top: 4px solid #d4af37;
+        border-radius: 50%; width: 30px; height: 30px;
+        animation: spin 1s linear infinite; margin-bottom: 20px;
+        display: none; /* Hidden by default */
       }
-
-      #close-btn {
-        margin-top: 30px; padding: 12px 30px;
-        background: transparent; color: white;
-        border: 1px solid white; border-radius: 30px;
-        cursor: pointer; opacity: 0.7;
-      }
-
-      @keyframes pulse { 0% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.05); } 100% { transform: translate(-50%, -50%) scale(1); } }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
   </head>
   <body>
 
-    <div id="scan-ui">
-      <div class="scanner-box"></div>
-      <div class="scanner-text">POINT AT GIFT</div>
-    </div>
-
-    <div id="found-btn">
-      <h2>OPEN GIFT</h2>
-      <p>Tap Here</p>
-    </div>
-
-    <div id="cinema-mode">
-      <video id="cinema-video" playsinline webkit-playsinline controls>
-        <source src="./magic-video.mp4" type="video/mp4">
-      </video>
-      <button id="close-btn">CLOSE</button>
+    <div id="start-screen">
+      <div class="loader" id="loader"></div>
+      <button id="start-btn">TAP TO START</button>
+      <p style="color: #666; font-size: 10px; margin-top: 10px;">POWERED BY WEB-AR</p>
     </div>
 
     <a-scene 
-      mindar-image="imageTargetSrc: ./targets.mind; uiScanning: no; filterMinCF:0.0001; filterBeta: 0.001;" 
+      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
       color-space="sRGB" 
       renderer="colorManagement: true, physicallyCorrectLights" 
       vr-mode-ui="enabled: false" 
       device-orientation-permission-ui="enabled: false">
       
+      <a-assets>
+        <video id="vid" src="./magic-video.mp4" 
+               preload="auto" loop="true" 
+               playsinline webkit-playsinline muted 
+               crossorigin="anonymous"></video>
+      </a-assets>
+
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-      <a-entity id="target-anchor" mindar-image-target="targetIndex: 0"></a-entity>
+
+      <a-entity id="target-anchor" mindar-image-target="targetIndex: 0" visible="false"></a-entity>
+
+      <a-entity artivive-smooth="target: #target-anchor; friction: 0.1">
+        
+        <a-plane 
+          src="#vid" 
+          width="1" height="1.41" 
+          position="0 0 0"
+          material="shader: flat; src: #vid; opacity: 1;"
+        ></a-plane>
+
+      </a-entity>
       
     </a-scene>
 
     <script>
-      const targetAnchor = document.querySelector('#target-anchor');
-      const foundBtn = document.querySelector('#found-btn');
-      const scanUI = document.querySelector('#scan-ui');
-      const cinemaMode = document.querySelector('#cinema-mode');
-      const video = document.querySelector('#cinema-video');
-      const closeBtn = document.querySelector('#close-btn');
+      const startBtn = document.querySelector('#start-btn');
+      const startScreen = document.querySelector('#start-screen');
+      const video = document.querySelector('#vid');
+      const loader = document.querySelector('#loader');
 
-      // STATE CONTROL
-      let isPlaying = false;
-
-      // 1. TARGET FOUND -> SHOW GOLD BUTTON
-      targetAnchor.addEventListener("targetFound", () => {
-        if (isPlaying) return; // Ignore if already playing
+      // 1. INITIALIZE (Unlock Audio)
+      startBtn.addEventListener('click', () => {
+        startBtn.style.display = 'none';
+        loader.style.display = 'block';
         
-        console.log("Target Found");
-        scanUI.style.display = 'none';
-        foundBtn.style.display = 'block'; // This triggers the user to tap
-        
-        // Vibrate phone (Android only)
-        if (navigator.vibrate) navigator.vibrate(100);
+        // Force Video Load
+        video.muted = true;
+        video.play().then(() => {
+           video.pause(); // Pause and wait for target
+           startScreen.style.opacity = '0';
+           setTimeout(() => { startScreen.style.display = 'none'; }, 500);
+        }).catch(e => {
+           alert("Error playing video: " + e.message);
+        });
       });
 
-      // 2. TARGET LOST -> RESET UI
-      targetAnchor.addEventListener("targetLost", () => {
-        if (isPlaying) return; // Ignore if watching video
-        
-        console.log("Target Lost");
-        scanUI.style.display = 'flex';
-        foundBtn.style.display = 'none';
+      // 2. TARGET FOUND (Fade In Audio)
+      const anchor = document.querySelector('#target-anchor');
+      anchor.addEventListener("targetFound", () => {
+        video.muted = false;
+        video.currentTime = 0; // Restart for impact
+        video.play();
       });
 
-      // 3. USER TAPS BUTTON -> STOP TRACKING & PLAY
-      foundBtn.addEventListener('click', () => {
-        isPlaying = true;
-        
-        // Hide AR UI
-        foundBtn.style.display = 'none';
-        
-        // Show Video Player
-        cinemaMode.style.display = 'flex';
-        
-        // PLAY VIDEO (This works 100% because user tapped)
-        video.currentTime = 0;
-        video.play().catch(e => alert("Video Error: " + e.message));
-      });
-
-      // 4. RESET SYSTEM (When Closed or Video Ends)
-      function resetAR() {
-        isPlaying = false;
+      // 3. TARGET LOST (Fade Out)
+      anchor.addEventListener("targetLost", () => {
         video.pause();
-        cinemaMode.style.display = 'none';
-        scanUI.style.display = 'flex';
-        // Note: foundBtn remains hidden until the camera "finds" the image again
-      }
-
-      closeBtn.addEventListener('click', resetAR);
-      video.addEventListener('ended', resetAR);
-
+      });
     </script>
   </body>
 </html>
