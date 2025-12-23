@@ -6,51 +6,25 @@
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     <style>
-      /* 1. The Start Button Overlay */
-      #start-overlay {
+      /* Tap to Start Overlay (Required for Mobile) */
+      #overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.85); z-index: 999;
+        background: rgba(0,0,0,0.85); z-index: 9999;
         display: flex; flex-direction: column;
         justify-content: center; align-items: center;
         color: white; font-family: sans-serif;
       }
-      .btn {
-        padding: 15px 30px; font-size: 18px; background: #d4af37; color: black;
-        border: none; border-radius: 30px; font-weight: bold; cursor: pointer;
-        margin-top: 20px;
-      }
-
-      /* 2. The "Cinema Mode" Video Player (Hidden by default) */
-      #cinema-overlay {
-        display: none; /* Hidden until target is found */
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: black; z-index: 888;
-        justify-content: center; align-items: center;
-      }
-      #cinema-video {
-        width: 100%; max-width: 800px; /* Limits width on tablets */
-        box-shadow: 0 0 50px rgba(212, 175, 55, 0.5); /* Gold Glow */
-      }
-      #close-btn {
-        position: absolute; top: 20px; right: 20px;
-        background: rgba(255,255,255,0.3); color: white;
-        border: none; padding: 10px 20px; border-radius: 20px;
+      #startBtn {
+        margin-top: 20px; padding: 15px 40px; font-size: 18px;
+        background: #d4af37; color: black; border: none; border-radius: 30px;
         font-weight: bold; cursor: pointer;
       }
     </style>
   </head>
   <body>
-
-    <div id="start-overlay">
+    <div id="overlay">
       <h2>Unlock the Legacy</h2>
-      <button class="btn" id="startBtn">START EXPERIENCE</button>
-    </div>
-
-    <div id="cinema-overlay">
-      <button id="close-btn">CLOSE X</button>
-      <video id="cinema-video" playsinline webkit-playsinline controls>
-        <source src="./magic-video.mp4" type="video/mp4">
-      </video>
+      <button id="startBtn">START EXPERIENCE</button>
     </div>
 
     <a-scene 
@@ -60,40 +34,46 @@
       vr-mode-ui="enabled: false" 
       device-orientation-permission-ui="enabled: false">
       
+      <a-assets>
+        <video id="vid" src="./magic-video.mp4" 
+               preload="auto" loop="true" 
+               playsinline webkit-playsinline muted 
+               crossorigin="anonymous"></video>
+      </a-assets>
+
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <a-entity mindar-image-target="targetIndex: 0"></a-entity>
+      <a-entity mindar-image-target="targetIndex: 0">
+        
+        <a-video 
+          src="#vid" 
+          width="1" 
+          height="1.41" 
+          position="0 0 0.1" 
+          scale="1.5 1.5 1.5"
+        ></a-video>
+        
+      </a-entity>
     </a-scene>
 
     <script>
       const startBtn = document.querySelector('#startBtn');
-      const startOverlay = document.querySelector('#start-overlay');
-      const cinemaOverlay = document.querySelector('#cinema-overlay');
-      const cinemaVideo = document.querySelector('#cinema-video');
-      const closeBtn = document.querySelector('#close-btn');
+      const overlay = document.querySelector('#overlay');
+      const video = document.querySelector('#vid');
 
-      // 1. User taps start (Required for Mobile Audio)
       startBtn.addEventListener('click', () => {
-        startOverlay.style.display = 'none';
+        overlay.style.display = 'none';
+        video.play();
+        video.pause();
       });
 
-      // 2. Target Found -> Switch to Cinema Mode
       const target = document.querySelector('[mindar-image-target]');
       target.addEventListener("targetFound", event => {
-        console.log("Target Found - Locking Video");
-        
-        // Show the full screen player
-        cinemaOverlay.style.display = 'flex';
-        
-        // Play the video
-        cinemaVideo.currentTime = 0;
-        cinemaVideo.play();
+        video.muted = false;
+        video.play();
       });
-
-      // 3. Close Button -> Go back to Camera
-      closeBtn.addEventListener('click', () => {
-        cinemaOverlay.style.display = 'none';
-        cinemaVideo.pause();
+      target.addEventListener("targetLost", event => {
+        video.pause();
       });
     </script>
   </body>
