@@ -2,157 +2,156 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Legacy Gift AR</title>
+    <title>Artivive Style WebAR</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     
+    <script>
+      // --- COMPONENT: ARTIVIVE FADE-IN ---
+      // This mimics the "Premium" feel. The video doesn't just appear;
+      // it fades in smoothly when detected, and fades out slowly when lost.
+      AFRAME.registerComponent('fade-in-out', {
+        init: function() {
+          this.el.setAttribute('material', 'opacity', 0);
+          this.el.setAttribute('visible', false);
+          this.fadeSpeed = 0.05; // 0.05 = Slow/Premium Fade
+        },
+        tick: function() {
+          const target = document.querySelector('#target-anchor');
+          const videoMesh = this.el.getObject3D('mesh');
+          if (!videoMesh || !videoMesh.material) return;
+
+          if (target.object3D.visible) {
+            // FADE IN
+            this.el.setAttribute('visible', true);
+            if (videoMesh.material.opacity < 1) {
+              videoMesh.material.opacity += this.fadeSpeed;
+            }
+          } else {
+            // FADE OUT (Don't hide immediately, let it linger)
+            if (videoMesh.material.opacity > 0) {
+              videoMesh.material.opacity -= this.fadeSpeed;
+            } else {
+              this.el.setAttribute('visible', false);
+            }
+          }
+        }
+      });
+    </script>
+
     <style>
-      body { margin: 0; font-family: 'Arial', sans-serif; overflow: hidden; background: black; }
+      body { margin: 0; background: black; font-family: 'Helvetica Neue', sans-serif; overflow: hidden; }
       
-      /* 1. SCANNING UI (The Brackets) */
-      #scan-ui {
+      /* UI: START SCREEN (Artivive Style) */
+      #start-screen {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        z-index: 10; pointer-events: none;
+        background: black; z-index: 9999;
         display: flex; flex-direction: column;
         justify-content: center; align-items: center;
+        transition: opacity 0.8s;
       }
-      .scanner-box {
-        width: 70vw; height: 100vw;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        border-radius: 10px;
-        position: relative;
+      
+      #start-btn {
+        padding: 16px 40px; font-size: 16px; font-weight: 600; letter-spacing: 2px;
+        background: white; color: black;
+        border: none; border-radius: 4px;
+        cursor: pointer; text-transform: uppercase;
       }
-      .scanner-box::after {
-        content: "SCANNING...";
-        position: absolute; bottom: -30px; width: 100%; text-align: center;
-        color: white; font-size: 12px; letter-spacing: 2px; opacity: 0.7;
+      
+      /* UI: SCANNING GUIDE */
+      #scan-guide {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        pointer-events: none; display: flex;
+        justify-content: center; align-items: center;
+        opacity: 0; transition: opacity 1s;
       }
-
-      /* 2. THE "FOUND" NOTIFICATION (User must tap this) */
-      #found-btn {
-        display: none; /* Hidden until found */
-        position: absolute; z-index: 999;
-        top: 50%; left: 50%; transform: translate(-50%, -50%);
-        background: linear-gradient(135deg, #d4af37, #f7e6ad);
-        padding: 20px 40px; border-radius: 50px;
-        box-shadow: 0 0 30px rgba(212, 175, 55, 0.8);
-        text-align: center; cursor: pointer; animation: popIn 0.3s ease-out;
+      .scan-frame {
+        width: 70vw; height: 100vw; /* Approx A4 Ratio */
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 8px;
       }
-      #found-btn h3 { margin: 0; color: black; font-size: 18px; font-weight: 900; }
-      #found-btn p { margin: 5px 0 0 0; color: #333; font-size: 12px; }
-
-      /* 3. THE VIDEO PLAYER (Cinema Mode) */
-      #cinema-mode {
-        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: black; z-index: 1000;
-        justify-content: center; align-items: center; flex-direction: column;
-      }
-      #cinema-video {
-        width: 100%; max-width: 600px;
-        aspect-ratio: 1 / 1.41; /* Forces A4 Shape */
-        object-fit: contain;
-      }
-      #close-btn {
-        margin-top: 20px; padding: 12px 30px;
-        background: rgba(255,255,255,0.2); color: white;
-        border: 1px solid white; border-radius: 30px;
-        cursor: pointer; text-transform: uppercase; font-size: 12px;
-      }
-
-      @keyframes popIn { from { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
     </style>
   </head>
   <body>
 
-    <div id="scan-ui">
-      <div class="scanner-box"></div>
+    <div id="start-screen">
+      <img src="https://cdn-icons-png.flaticon.com/512/747/747376.png" width="80" style="margin-bottom:30px; filter:invert(1);">
+      <button id="start-btn">TAP TO START</button>
+      <p style="color:#666; font-size:11px; margin-top:20px;">POWERED BY MINDAR</p>
     </div>
 
-    <div id="found-btn">
-      <h3>GIFT DETECTED</h3>
-      <p>Tap to Open</p>
-    </div>
-
-    <div id="cinema-mode">
-      <video id="cinema-video" playsinline webkit-playsinline controls>
-        <source src="./magic-video.mp4" type="video/mp4">
-      </video>
-      <button id="close-btn">Close & Rescan</button>
+    <div id="scan-guide">
+      <div class="scan-frame"></div>
     </div>
 
     <a-scene 
-      mindar-image="imageTargetSrc: ./targets.mind; uiScanning: no; filterMinCF:0.0001; filterBeta: 0.001;" 
+      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; missTolerance: 10; uiScanning: no; uiLoading: no;" 
       color-space="sRGB" 
       renderer="colorManagement: true, physicallyCorrectLights" 
       vr-mode-ui="enabled: false" 
       device-orientation-permission-ui="enabled: false">
       
+      <a-assets>
+        <video id="vid" src="./magic-video.mp4" 
+               preload="auto" loop="true" 
+               playsinline webkit-playsinline muted 
+               crossorigin="anonymous"></video>
+      </a-assets>
+
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
       <a-entity id="target-anchor" mindar-image-target="targetIndex: 0"></a-entity>
+
+      <a-entity id="video-entity" fade-in-out>
+        <a-video 
+          src="#vid" 
+          width="1" height="1.41" 
+          position="0 0 0" 
+          rotation="0 0 0"
+        ></a-video>
+      </a-entity>
       
     </a-scene>
 
     <script>
+      const startBtn = document.querySelector('#start-btn');
+      const startScreen = document.querySelector('#start-screen');
+      const scanGuide = document.querySelector('#scan-guide');
+      const video = document.querySelector('#vid');
+      const videoEntity = document.querySelector('#video-entity');
       const targetAnchor = document.querySelector('#target-anchor');
-      const foundBtn = document.querySelector('#found-btn');
-      const scanUI = document.querySelector('#scan-ui');
-      const cinemaMode = document.querySelector('#cinema-mode');
-      const video = document.querySelector('#cinema-video');
-      const closeBtn = document.querySelector('#close-btn');
 
-      // STATE VARIABLE to prevent double-firing
-      let isPlaying = false;
+      // 1. START EXPERIENCE (Unlock Audio)
+      startBtn.addEventListener('click', () => {
+        // Fade out start screen
+        startScreen.style.opacity = '0';
+        setTimeout(() => { startScreen.style.display = 'none'; }, 800);
+        
+        // Show Scan Guide
+        scanGuide.style.opacity = '1';
 
-      // 1. TARGET FOUND -> SHOW BUTTON
+        // Wake up video engine (Muted first to be safe)
+        video.muted = true;
+        video.play().then(() => {
+          video.pause(); // Pause and wait for tracking
+          video.currentTime = 0;
+        });
+      });
+
+      // 2. TARGET FOUND
       targetAnchor.addEventListener("targetFound", () => {
-        if (isPlaying) return; // Ignore if already playing
-        console.log("Target Found");
-        
-        // Hide Scanner, Show "Tap to Open" Button
-        scanUI.style.display = 'none';
-        foundBtn.style.display = 'block';
-        
-        // Optional: Vibrate phone to alert user
-        if (navigator.vibrate) navigator.vibrate(200);
+        console.log("Locked");
+        scanGuide.style.opacity = '0.2'; // Dim the guide
+        video.muted = false; // Turn on Sound
+        video.play();
       });
 
-      // 2. TARGET LOST -> HIDE BUTTON (If they haven't clicked yet)
+      // 3. TARGET LOST
       targetAnchor.addEventListener("targetLost", () => {
-        if (isPlaying) return; // Ignore if watching video
-        console.log("Target Lost");
-        
-        // Go back to scanning
-        scanUI.style.display = 'flex';
-        foundBtn.style.display = 'none';
-      });
-
-      // 3. USER CLICKS BUTTON -> PLAY VIDEO
-      foundBtn.addEventListener('click', () => {
-        isPlaying = true;
-        
-        // Hide Button
-        foundBtn.style.display = 'none';
-        
-        // Show Video Player
-        cinemaMode.style.display = 'flex';
-        
-        // Play Video (Authorized by click)
-        video.currentTime = 0;
-        video.play().catch(e => console.log("Play Error:", e));
-      });
-
-      // 4. CLOSE / RESET
-      function resetSystem() {
-        isPlaying = false;
+        console.log("Lost");
+        scanGuide.style.opacity = '1'; // Show guide again
         video.pause();
-        cinemaMode.style.display = 'none';
-        scanUI.style.display = 'flex';
-        // Note: foundBtn stays hidden until target is found again
-      }
-
-      closeBtn.addEventListener('click', resetSystem);
-      video.addEventListener('ended', resetSystem);
-
+      });
     </script>
   </body>
 </html>
