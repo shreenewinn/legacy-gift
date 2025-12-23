@@ -6,171 +6,153 @@
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     
-    <script>
-      // --- THE ULTIMATE STABILIZER (Moving Average) ---
-      // This script stores the last 10 positions and averages them.
-      // Result: The video floats smoothly and ignores shaking.
-      AFRAME.registerComponent('smooth-average', {
-        schema: {
-          target: {type: 'selector'},
-          frames: {type: 'number', default: 10} // Higher = Smoother but slower
-        },
-        init: function() {
-          this.posHistory = [];
-          this.rotHistory = [];
-          this.el.object3D.visible = false;
-        },
-        tick: function (time, timeDelta) {
-          const targetEl = this.data.target;
-          
-          // 1. If target is lost, hide video
-          if (!targetEl.object3D.visible) {
-             this.el.object3D.visible = false;
-             this.posHistory = []; // Reset history
-             return;
-          }
-          this.el.object3D.visible = true;
-
-          // 2. Add current position to history
-          const currentPos = targetEl.object3D.position.clone();
-          const currentRot = targetEl.object3D.quaternion.clone();
-          
-          this.posHistory.push(currentPos);
-          this.rotHistory.push(currentRot);
-
-          // 3. Keep history limited to 10 frames
-          if (this.posHistory.length > this.data.frames) {
-            this.posHistory.shift();
-            this.rotHistory.shift();
-          }
-
-          // 4. CALCULATE AVERAGE POSITION
-          let avgPos = new THREE.Vector3(0, 0, 0);
-          this.posHistory.forEach(p => avgPos.add(p));
-          avgPos.divideScalar(this.posHistory.length);
-
-          // 5. CALCULATE AVERAGE ROTATION (Slerp)
-          // Simplified averaging for rotation to save CPU
-          const avgRot = this.rotHistory[this.rotHistory.length - 1]; 
-
-          // 6. Apply to Video
-          this.el.object3D.position.copy(avgPos);
-          this.el.object3D.quaternion.slerp(avgRot, 0.2);
-        }
-      });
-    </script>
-
     <style>
-      body { margin: 0; overflow: hidden; background: #000; }
-      #overlay {
+      body { margin: 0; font-family: 'Arial', sans-serif; overflow: hidden; background: black; }
+      
+      /* 1. SCANNING UI (The Brackets) */
+      #scan-ui {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.95); z-index: 9999;
+        z-index: 10; pointer-events: none;
         display: flex; flex-direction: column;
         justify-content: center; align-items: center;
-        color: white; font-family: sans-serif; text-align: center;
       }
-      #startBtn {
-        margin-top: 30px; padding: 20px 60px; font-size: 22px;
-        background: #d4af37; color: black; border: none; border-radius: 50px;
-        font-weight: 800; cursor: pointer; text-transform: uppercase;
-        box-shadow: 0 0 30px rgba(212, 175, 55, 0.6);
+      .scanner-box {
+        width: 70vw; height: 100vw;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 10px;
+        position: relative;
       }
-      #status-bar {
-        position: fixed; top: 0; left: 0; width: 100%;
-        background: rgba(50, 50, 50, 0.8); color: #00ff00;
-        font-family: monospace; font-size: 12px; padding: 8px;
-        z-index: 1000; pointer-events: none; text-align: center;
+      .scanner-box::after {
+        content: "SCANNING...";
+        position: absolute; bottom: -30px; width: 100%; text-align: center;
+        color: white; font-size: 12px; letter-spacing: 2px; opacity: 0.7;
       }
+
+      /* 2. THE "FOUND" NOTIFICATION (User must tap this) */
+      #found-btn {
+        display: none; /* Hidden until found */
+        position: absolute; z-index: 999;
+        top: 50%; left: 50%; transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, #d4af37, #f7e6ad);
+        padding: 20px 40px; border-radius: 50px;
+        box-shadow: 0 0 30px rgba(212, 175, 55, 0.8);
+        text-align: center; cursor: pointer; animation: popIn 0.3s ease-out;
+      }
+      #found-btn h3 { margin: 0; color: black; font-size: 18px; font-weight: 900; }
+      #found-btn p { margin: 5px 0 0 0; color: #333; font-size: 12px; }
+
+      /* 3. THE VIDEO PLAYER (Cinema Mode) */
+      #cinema-mode {
+        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: black; z-index: 1000;
+        justify-content: center; align-items: center; flex-direction: column;
+      }
+      #cinema-video {
+        width: 100%; max-width: 600px;
+        aspect-ratio: 1 / 1.41; /* Forces A4 Shape */
+        object-fit: contain;
+      }
+      #close-btn {
+        margin-top: 20px; padding: 12px 30px;
+        background: rgba(255,255,255,0.2); color: white;
+        border: 1px solid white; border-radius: 30px;
+        cursor: pointer; text-transform: uppercase; font-size: 12px;
+      }
+
+      @keyframes popIn { from { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
     </style>
   </head>
   <body>
-    
-    <div id="overlay">
-      <h1 style="margin-bottom: 0;">LEGACY AR</h1>
-      <p style="opacity: 0.7; max-width: 80%;">Turn volume up & tap below</p>
-      <button id="startBtn">UNLOCK EXPERIENCE</button>
+
+    <div id="scan-ui">
+      <div class="scanner-box"></div>
     </div>
 
-    <div id="status-bar">System Ready. Waiting for user...</div>
+    <div id="found-btn">
+      <h3>GIFT DETECTED</h3>
+      <p>Tap to Open</p>
+    </div>
+
+    <div id="cinema-mode">
+      <video id="cinema-video" playsinline webkit-playsinline controls>
+        <source src="./magic-video.mp4" type="video/mp4">
+      </video>
+      <button id="close-btn">Close & Rescan</button>
+    </div>
 
     <a-scene 
-      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
+      mindar-image="imageTargetSrc: ./targets.mind; uiScanning: no; filterMinCF:0.0001; filterBeta: 0.001;" 
       color-space="sRGB" 
       renderer="colorManagement: true, physicallyCorrectLights" 
       vr-mode-ui="enabled: false" 
       device-orientation-permission-ui="enabled: false">
       
-      <a-assets>
-        <video id="vid" src="./magic-video.mp4" 
-               preload="auto" loop="true" 
-               playsinline webkit-playsinline muted 
-               crossorigin="anonymous"></video>
-      </a-assets>
-
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-
       <a-entity id="target-anchor" mindar-image-target="targetIndex: 0"></a-entity>
-
-      <a-entity smooth-average="target: #target-anchor; frames: 15">
-        
-        <a-plane color="black" position="0 0 -0.01" width="1.05" height="1.45"></a-plane>
-
-        <a-video 
-          src="#vid" 
-          width="1" height="1.41" 
-          position="0 0 0.05" 
-          scale="1.2 1.2 1.2"
-        ></a-video>
-      </a-entity>
       
     </a-scene>
 
     <script>
-      const startBtn = document.querySelector('#startBtn');
-      const overlay = document.querySelector('#overlay');
-      const video = document.querySelector('#vid');
-      const statusBar = document.querySelector('#status-bar');
+      const targetAnchor = document.querySelector('#target-anchor');
+      const foundBtn = document.querySelector('#found-btn');
+      const scanUI = document.querySelector('#scan-ui');
+      const cinemaMode = document.querySelector('#cinema-mode');
+      const video = document.querySelector('#cinema-video');
+      const closeBtn = document.querySelector('#close-btn');
 
-      // 1. FORCE VIDEO UNLOCK
-      startBtn.addEventListener('click', () => {
-        overlay.style.display = 'none';
+      // STATE VARIABLE to prevent double-firing
+      let isPlaying = false;
+
+      // 1. TARGET FOUND -> SHOW BUTTON
+      targetAnchor.addEventListener("targetFound", () => {
+        if (isPlaying) return; // Ignore if already playing
+        console.log("Target Found");
         
-        // Attempt to play
-        video.muted = true;
-        video.play().then(() => {
-          statusBar.innerText = "Video Engine: RUNNING (Muted)";
-          statusBar.style.color = "yellow";
-        }).catch(e => {
-          statusBar.innerText = "Video Engine: BLOCKED (" + e.message + ")";
-          statusBar.style.color = "red";
-        });
+        // Hide Scanner, Show "Tap to Open" Button
+        scanUI.style.display = 'none';
+        foundBtn.style.display = 'block';
+        
+        // Optional: Vibrate phone to alert user
+        if (navigator.vibrate) navigator.vibrate(200);
       });
 
-      // 2. TARGET FOUND
-      const anchor = document.querySelector('#target-anchor');
-      anchor.addEventListener("targetFound", () => {
-        statusBar.innerText = "Tracking: LOCKED | Audio: ON";
-        statusBar.style.color = "#00ff00"; // Green
-        video.muted = false;
-        video.play();
+      // 2. TARGET LOST -> HIDE BUTTON (If they haven't clicked yet)
+      targetAnchor.addEventListener("targetLost", () => {
+        if (isPlaying) return; // Ignore if watching video
+        console.log("Target Lost");
+        
+        // Go back to scanning
+        scanUI.style.display = 'flex';
+        foundBtn.style.display = 'none';
       });
 
-      // 3. TARGET LOST
-      anchor.addEventListener("targetLost", () => {
-        statusBar.innerText = "Tracking: SEARCHING...";
-        statusBar.style.color = "white";
+      // 3. USER CLICKS BUTTON -> PLAY VIDEO
+      foundBtn.addEventListener('click', () => {
+        isPlaying = true;
+        
+        // Hide Button
+        foundBtn.style.display = 'none';
+        
+        // Show Video Player
+        cinemaMode.style.display = 'flex';
+        
+        // Play Video (Authorized by click)
+        video.currentTime = 0;
+        video.play().catch(e => console.log("Play Error:", e));
       });
-      
-      // 4. TEXTURE REFRESH LOOP (Fixes Black Screen on Mobile 1)
-      // This forces the browser to redraw the video texture constantly
-      setInterval(() => {
-        if (!video.paused) {
-           const mesh = document.querySelector('a-video').getObject3D('mesh');
-           if (mesh && mesh.material.map) {
-             mesh.material.map.needsUpdate = true;
-           }
-        }
-      }, 500);
+
+      // 4. CLOSE / RESET
+      function resetSystem() {
+        isPlaying = false;
+        video.pause();
+        cinemaMode.style.display = 'none';
+        scanUI.style.display = 'flex';
+        // Note: foundBtn stays hidden until target is found again
+      }
+
+      closeBtn.addEventListener('click', resetSystem);
+      video.addEventListener('ended', resetSystem);
+
     </script>
   </body>
 </html>
