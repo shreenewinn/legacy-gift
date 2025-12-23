@@ -2,20 +2,15 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SAS Infra Legacy</title>
+    <title>Legacy Gift AR</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     
     <script>
-      // COMPONENT: SMOOTH FOLLOW (Zero Jitter)
+      // --- ADVANCED COMPONENT 1: ZERO JITTER (Shock Absorber) ---
       AFRAME.registerComponent('smooth-follow', {
-        schema: {
-          target: {type: 'selector'},
-          speed: {type: 'number', default: 0.1}
-        },
-        init: function() {
-          this.el.object3D.visible = false;
-        },
+        schema: { target: {type: 'selector'}, speed: {type: 'number', default: 0.1} },
+        init: function() { this.el.object3D.visible = false; },
         tick: function (time, timeDelta) {
           const targetEl = this.data.target;
           if (!targetEl.object3D.visible) {
@@ -27,42 +22,61 @@
           this.el.object3D.quaternion.slerp(targetEl.object3D.quaternion, this.data.speed);
         }
       });
+
+      // --- ADVANCED COMPONENT 2: TEXTURE FIXER (The "Black Screen" Killer) ---
+      // This forces the 3D engine to refresh the video frame every millisecond.
+      AFRAME.registerComponent('force-video-texture', {
+        tick: function () {
+          const mesh = this.el.getObject3D('mesh');
+          if (mesh && mesh.material && mesh.material.map) {
+            mesh.material.map.needsUpdate = true;
+          }
+        }
+      });
     </script>
 
     <style>
+      body { margin: 0; overflow: hidden; font-family: sans-serif; }
+      
+      /* UI OVERLAY */
       #overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.9); z-index: 9999;
+        background: rgba(0,0,0,0.92); z-index: 9999;
         display: flex; flex-direction: column;
         justify-content: center; align-items: center;
-        color: white; font-family: sans-serif;
+        color: white; text-align: center;
       }
       #startBtn {
-        margin-top: 20px; padding: 15px 40px; font-size: 18px;
-        background: #d4af37; color: black; border: none; border-radius: 30px;
-        font-weight: bold; cursor: pointer;
+        margin-top: 30px; padding: 15px 50px; font-size: 20px;
+        background: linear-gradient(45deg, #d4af37, #f7e6ad, #d4af37);
+        color: black; border: none; border-radius: 50px;
+        font-weight: bold; cursor: pointer; letter-spacing: 1px;
+        box-shadow: 0 0 25px rgba(212, 175, 55, 0.6);
       }
-      /* DEBUG STATUS BAR (Yellow Text) */
-      #debug-console {
-        position: fixed; top: 10px; left: 10px; color: yellow; z-index: 999; 
-        font-family: monospace; font-size: 14px; background: rgba(0,0,0,0.5);
-        padding: 5px; pointer-events: none;
+      
+      /* DEBUG PANEL (Visible for testing) */
+      #console-ui {
+        position: fixed; top: 0; left: 0; width: 100%; 
+        background: rgba(0,0,0,0.6); color: #00ff00; 
+        font-family: monospace; font-size: 12px; padding: 5px;
+        z-index: 1000; pointer-events: none;
       }
     </style>
   </head>
   <body>
     
     <div id="overlay">
-      <h2>Unlock the Legacy</h2>
-      <button id="startBtn">START EXPERIENCE</button>
+      <h2 style="font-weight: 300; letter-spacing: 2px;">PRESIDENT'S OFFICE</h2>
+      <p style="opacity: 0.7;">Tap to initialize Augmented Reality</p>
+      <button id="startBtn">INITIALIZE</button>
     </div>
 
-    <div id="debug-console">Status: Waiting...</div>
+    <div id="console-ui">System Ready. Waiting for user...</div>
 
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
       color-space="sRGB" 
-      renderer="colorManagement: true, physicallyCorrectLights" 
+      renderer="colorManagement: true, physicallyCorrectLights, highRefreshRate: true" 
       vr-mode-ui="enabled: false" 
       device-orientation-permission-ui="enabled: false">
       
@@ -78,14 +92,14 @@
       <a-entity id="target-anchor" mindar-image-target="targetIndex: 0"></a-entity>
 
       <a-entity smooth-follow="target: #target-anchor; speed: 0.1">
-        <a-video 
+        <a-plane 
+          force-video-texture
           src="#vid" 
-          width="1" 
-          height="1.41" 
+          width="1" height="1.41" 
           position="0 0 0.05"
           scale="1.2 1.2 1.2"
-          material="shader: flat; src: #vid; transparent: true;"
-        ></a-video>
+          material="shader: flat; src: #vid; transparent: false; alphaTest: 0.5;">
+        </a-plane>
       </a-entity>
       
     </a-scene>
@@ -94,46 +108,47 @@
       const startBtn = document.querySelector('#startBtn');
       const overlay = document.querySelector('#overlay');
       const video = document.querySelector('#vid');
-      const debugText = document.querySelector('#debug-console');
+      const logUI = document.querySelector('#console-ui');
 
-      // --- LOGIC: FORCE VIDEO TO PLAY ---
-      
-      function updateDebug() {
-        // This updates the yellow text so you know what is happening
-        const state = video.readyState === 4 ? "Ready" : "Loading";
-        const playing = !video.paused ? "Playing" : "Paused";
-        const time = Math.floor(video.currentTime);
-        debugText.innerText = `Vid: ${state} | ${playing} | Time: ${time}s`;
-        requestAnimationFrame(updateDebug);
-      }
-
+      // --- 1. USER INTERACTION (THE KEY) ---
       startBtn.addEventListener('click', () => {
         overlay.style.display = 'none';
         
-        // 1. Force Play MUTED first (Highest success rate)
-        video.muted = true; 
-        
-        const playPromise = video.play();
-
-        if (playPromise !== undefined) {
-          playPromise.then(_ => {
-            console.log("Autoplay started!");
-            updateDebug(); // Start the status monitor
-          })
-          .catch(error => {
-            console.log("Autoplay blocked:", error);
-            debugText.innerText = "Error: Video Blocked by Phone";
-          });
-        }
+        // Try to play immediately (Muted)
+        video.muted = true;
+        video.play().then(() => {
+          logUI.innerText = "Video: PLAYING (Background)";
+        }).catch(e => {
+          logUI.innerText = "Video: ERROR " + e.message;
+        });
       });
 
-      // 2. TARGET FOUND LOGIC
+      // --- 2. TRACKING EVENTS ---
       const anchor = document.querySelector('#target-anchor');
-      anchor.addEventListener("targetFound", event => {
-        // Only NOW do we try to turn on sound
-        video.muted = false; 
+      
+      anchor.addEventListener("targetFound", () => {
+        logUI.innerText = "Tracking: LOCKED | Video: Unmuting...";
+        // When found, try to unmute and ensure it's playing
+        video.muted = false;
+        video.play();
       });
       
+      anchor.addEventListener("targetLost", () => {
+        logUI.innerText = "Tracking: SEARCHING...";
+        // Optional: Pause video to save battery
+        // video.pause(); 
+      });
+
+      // --- 3. ADVANCED DEBUG LOOP ---
+      // This checks every second if the video is actually processing data
+      setInterval(() => {
+        if (!video.paused && video.readyState >= 3) {
+           // Video is healthy
+        } else if (overlay.style.display === 'none') {
+           // User clicked start, but video is stuck. FORCE KICK.
+           video.play();
+        }
+      }, 1000);
     </script>
   </body>
 </html>
