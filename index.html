@@ -2,92 +2,79 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Artivive Clone</title>
+    <title>Artivive Style AR</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     
     <script>
-      // --- THE "ARTIVIVE" PHYSICS ENGINE ---
-      // This script creates that "Premium Smoothness" you want.
-      // It separates the video from the jittery camera.
-      
-      AFRAME.registerComponent('artivive-smooth', {
+      // --- THE "GHOST FOLLOW" COMPONENT ---
+      // This is the secret sauce. It ignores small shakes (jitter)
+      // and only moves if you move your phone significantly.
+      AFRAME.registerComponent('ghost-follow', {
         schema: {
           target: {type: 'selector'},
-          friction: {type: 'number', default: 0.1} // 0.1 = Heavy/Smooth, 1.0 = Instant/Jittery
+          speed: {type: 'number', default: 0.15} // Lower = Smoother
         },
         init: function() {
           this.el.object3D.visible = false;
-          this.isPlaying = false;
         },
         tick: function (t, dt) {
           const targetEl = this.data.target;
-          const targetObj = targetEl.object3D;
-          const myObj = this.el.object3D;
-
-          // 1. VISIBILITY LOGIC (Prevents flickering)
-          if (!targetObj.visible) {
-             if (this.isPlaying) {
-               // If lost, slowly fade out or hide (here we hide for simplicity)
-               myObj.visible = false;
+          if (!targetEl.object3D.visible) {
+             // If lost, we don't hide immediately. We let it "linger" like Artivive.
+             if (this.el.object3D.visible) {
+               this.el.object3D.visible = false; 
+               // (Advanced: You could add a fade-out animation here)
              }
              return;
           }
-          
-          // If found, show it
-          myObj.visible = true;
+          this.el.object3D.visible = true;
 
-          // 2. THE "BUTTER" MATH (Linear Interpolation)
-          // Instead of snapping to position, we "slide" towards it.
-          // This kills 100% of the jitter because micro-shakes are ignored.
-          
-          // Move Position
-          myObj.position.lerp(targetObj.position, this.data.friction);
-          
-          // Move Rotation
-          myObj.quaternion.slerp(targetObj.quaternion, this.data.friction);
-          
-          // Move Scale (If you zoom in/out)
-          myObj.scale.lerp(targetObj.scale, this.data.friction);
+          // INTERPOLATION: Move 15% of the way to the target every frame.
+          // This filters out 100% of the micro-jitter.
+          this.el.object3D.position.lerp(targetEl.object3D.position, this.data.speed);
+          this.el.object3D.quaternion.slerp(targetEl.object3D.quaternion, this.data.speed);
+          this.el.object3D.scale.lerp(targetEl.object3D.scale, this.data.speed);
         }
       });
     </script>
 
     <style>
-      body { margin: 0; overflow: hidden; font-family: 'Helvetica', sans-serif; background: black; }
+      body { margin: 0; overflow: hidden; font-family: sans-serif; background: black; }
       
-      /* UI: START OVERLAY */
-      #start-screen {
+      /* THE START OVERLAY */
+      #overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.9); z-index: 9999;
+        background: rgba(0,0,0,0.85); z-index: 9999;
         display: flex; flex-direction: column;
         justify-content: center; align-items: center;
         transition: opacity 0.5s;
       }
+      
+      /* THE MAGIC BUTTON */
       #start-btn {
         padding: 15px 40px; font-size: 18px; letter-spacing: 2px;
         background: transparent; color: white;
-        border: 2px solid white; border-radius: 50px;
-        cursor: pointer; text-transform: uppercase;
+        border: 2px solid #d4af37; border-radius: 50px;
+        cursor: pointer; text-transform: uppercase; font-weight: bold;
+        box-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
       }
       
-      /* UI: LOADING SPINNER */
-      .loader {
-        border: 4px solid #f3f3f3; border-top: 4px solid #d4af37;
-        border-radius: 50%; width: 30px; height: 30px;
-        animation: spin 1s linear infinite; margin-bottom: 20px;
-        display: none; /* Hidden by default */
+      /* STATUS TEXT */
+      #status {
+        position: fixed; bottom: 20px; width: 100%; text-align: center;
+        color: white; font-size: 12px; opacity: 0.6; pointer-events: none;
       }
-      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
   </head>
   <body>
 
-    <div id="start-screen">
-      <div class="loader" id="loader"></div>
-      <button id="start-btn">TAP TO START</button>
-      <p style="color: #666; font-size: 10px; margin-top: 10px;">POWERED BY WEB-AR</p>
+    <div id="overlay">
+      <h2 style="color:white; margin-bottom: 30px;">REVEAL THE LEGACY</h2>
+      <button id="start-btn">START EXPERIENCE</button>
     </div>
+
+    <div id="status">Point camera at image</div>
 
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
@@ -105,14 +92,14 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <a-entity id="target-anchor" mindar-image-target="targetIndex: 0" visible="false"></a-entity>
+      <a-entity id="anchor" mindar-image-target="targetIndex: 0" visible="false"></a-entity>
 
-      <a-entity artivive-smooth="target: #target-anchor; friction: 0.1">
+      <a-entity ghost-follow="target: #anchor; speed: 0.1">
         
         <a-plane 
           src="#vid" 
           width="1" height="1.41" 
-          position="0 0 0"
+          position="0 0 0" 
           material="shader: flat; src: #vid; opacity: 1;"
         ></a-plane>
 
@@ -121,37 +108,37 @@
     </a-scene>
 
     <script>
+      const overlay = document.querySelector('#overlay');
       const startBtn = document.querySelector('#start-btn');
-      const startScreen = document.querySelector('#start-screen');
       const video = document.querySelector('#vid');
-      const loader = document.querySelector('#loader');
+      const statusText = document.querySelector('#status');
+      const anchor = document.querySelector('#anchor');
 
-      // 1. INITIALIZE (Unlock Audio)
+      // 1. UNLOCK AUDIO & VIDEO
       startBtn.addEventListener('click', () => {
-        startBtn.style.display = 'none';
-        loader.style.display = 'block';
+        // Fade out overlay
+        overlay.style.opacity = '0';
+        setTimeout(() => { overlay.style.display = 'none'; }, 500);
         
-        // Force Video Load
+        // Force video to "wake up"
         video.muted = true;
         video.play().then(() => {
-           video.pause(); // Pause and wait for target
-           startScreen.style.opacity = '0';
-           setTimeout(() => { startScreen.style.display = 'none'; }, 500);
-        }).catch(e => {
-           alert("Error playing video: " + e.message);
+          video.pause(); // Pause immediately, wait for target
         });
       });
 
-      // 2. TARGET FOUND (Fade In Audio)
-      const anchor = document.querySelector('#target-anchor');
+      // 2. TARGET FOUND
       anchor.addEventListener("targetFound", () => {
-        video.muted = false;
-        video.currentTime = 0; // Restart for impact
+        statusText.innerText = "Target Locked";
+        video.currentTime = 0; // Restart video from 0
+        video.muted = false; // Turn on audio
         video.play();
       });
 
-      // 3. TARGET LOST (Fade Out)
+      // 3. TARGET LOST
       anchor.addEventListener("targetLost", () => {
+        statusText.innerText = "Searching...";
+        // Artivive style: keep playing audio for a second or pause
         video.pause();
       });
     </script>
