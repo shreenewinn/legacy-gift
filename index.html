@@ -6,24 +6,6 @@
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     
-    <script>
-      // COMPONENT: SMOOTH FOLLOW (Zero Jitter)
-      AFRAME.registerComponent('smooth-follow', {
-        schema: { target: {type: 'selector'}, speed: {type: 'number', default: 0.1} },
-        init: function() { this.el.object3D.visible = false; },
-        tick: function (time, timeDelta) {
-          const targetEl = this.data.target;
-          if (!targetEl.object3D.visible) {
-             this.el.object3D.visible = false;
-             return;
-          }
-          this.el.object3D.visible = true;
-          this.el.object3D.position.lerp(targetEl.object3D.position, this.data.speed);
-          this.el.object3D.quaternion.slerp(targetEl.object3D.quaternion, this.data.speed);
-        }
-      });
-    </script>
-
     <style>
       body { margin: 0; overflow: hidden; font-family: sans-serif; }
       #overlay {
@@ -40,7 +22,7 @@
       }
       #console-ui {
         position: fixed; top: 0; left: 0; width: 100%; 
-        background: rgba(0,0,0,0.5); color: #00ff00; 
+        background: rgba(0,0,0,0.5); color: yellow; 
         font-family: monospace; font-size: 14px; padding: 5px;
         z-index: 1000; pointer-events: none;
       }
@@ -53,10 +35,10 @@
       <button id="startBtn">INITIALIZE</button>
     </div>
 
-    <div id="console-ui">System Ready...</div>
+    <div id="console-ui">Waiting for start...</div>
 
     <a-scene 
-      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
+      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; missTolerance: 20;" 
       color-space="sRGB" 
       renderer="colorManagement: true, physicallyCorrectLights" 
       vr-mode-ui="enabled: false" 
@@ -71,16 +53,18 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <a-entity id="target-anchor" mindar-image-target="targetIndex: 0"></a-entity>
+      <a-entity mindar-image-target="targetIndex: 0">
+        
+        <a-plane color="red" position="0 0 0" width="1.1" height="1.5"></a-plane>
 
-      <a-entity smooth-follow="target: #target-anchor; speed: 0.1">
         <a-plane 
           src="#vid" 
           width="1" height="1.41" 
-          position="0 0 0.1" 
+          position="0 0 0.05" 
           scale="1.2 1.2 1.2"
-          material="shader: flat; src: #vid; opacity: 1.0; transparent: false;"
+          material="shader: flat; src: #vid; opacity: 1;"
         ></a-plane>
+
       </a-entity>
       
     </a-scene>
@@ -93,14 +77,14 @@
 
       function updateLog() {
          const time = Math.floor(video.currentTime);
-         logUI.innerText = `Video: PLAYING | Time: ${time}s`;
+         logUI.innerText = `Vid Playing: ${time}s`;
          requestAnimationFrame(updateLog);
       }
 
       startBtn.addEventListener('click', () => {
         overlay.style.display = 'none';
         
-        // Force Muted Play
+        // Force Play
         video.muted = true;
         video.play().then(() => {
           updateLog();
@@ -109,9 +93,9 @@
         });
       });
 
-      // When found, turn sound on
-      const anchor = document.querySelector('#target-anchor');
-      anchor.addEventListener("targetFound", () => {
+      // Unmute when found
+      const target = document.querySelector('[mindar-image-target]');
+      target.addEventListener("targetFound", () => {
         video.muted = false;
       });
     </script>
