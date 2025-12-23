@@ -7,31 +7,29 @@
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     
     <script>
-      // --- CUSTOM COMPONENT: THE SHOCK ABSORBER (LERP) ---
-      // This script forces the video to "slide" to the target position
-      // instead of jumping to it. This kills 100% of vibration.
+      // --- CUSTOM COMPONENT: ZERO JITTER (LERP) ---
       AFRAME.registerComponent('smooth-follow', {
         schema: {
           target: {type: 'selector'},
-          speed: {type: 'number', default: 0.1} // Lower = Smoother (more "heavy")
+          speed: {type: 'number', default: 0.1}
+        },
+        init: function() {
+          this.el.object3D.visible = false; // Hide initially
         },
         tick: function (time, timeDelta) {
           const targetEl = this.data.target;
+          
+          // Logic: If target is NOT visible, hide video and stop tracking
           if (!targetEl.object3D.visible) {
              this.el.object3D.visible = false;
              return;
           }
+          
+          // Logic: If target IS visible, show video and smooth follow
           this.el.object3D.visible = true;
-
-          // 1. GET TARGET POSITION (JITTERY)
           const targetPos = targetEl.object3D.position;
           const targetRot = targetEl.object3D.quaternion;
-          
-          // 2. LERP POSITION (SMOOTH MOVE)
-          // "Move 10% of the way there every frame"
           this.el.object3D.position.lerp(targetPos, this.data.speed);
-          
-          // 3. SLERP ROTATION (SMOOTH ROTATE)
           this.el.object3D.quaternion.slerp(targetRot, this.data.speed);
         }
       });
@@ -51,14 +49,21 @@
         font-weight: bold; cursor: pointer;
         box-shadow: 0 0 20px rgba(212, 175, 55, 0.5);
       }
+      #status {
+        position: fixed; top: 10px; left: 10px; color: yellow; z-index: 999; 
+        font-family: monospace; font-size: 12px; pointer-events: none;
+      }
     </style>
   </head>
   <body>
     
     <div id="overlay">
       <h2>Unlock the Legacy</h2>
+      <p style="font-size: 14px; opacity: 0.7;">Make sure volume is UP</p>
       <button id="startBtn">START EXPERIENCE</button>
     </div>
+
+    <div id="status">Waiting for start...</div>
 
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001;" 
@@ -70,7 +75,7 @@
       <a-assets>
         <video id="vid" src="./magic-video.mp4" 
                preload="auto" loop="true" 
-               playsinline webkit-playsinline muted 
+               playsinline webkit-playsinline 
                crossorigin="anonymous"></video>
       </a-assets>
 
@@ -94,24 +99,31 @@
       const startBtn = document.querySelector('#startBtn');
       const overlay = document.querySelector('#overlay');
       const video = document.querySelector('#vid');
+      const statusText = document.querySelector('#status');
 
-      // Mobile Audio Unlock
+      // 1. START BUTTON CLICK (The most important part)
       startBtn.addEventListener('click', () => {
         overlay.style.display = 'none';
-        video.play();
-        video.pause();
+        
+        // Force play IMMEDIATELY. Do not wait for target.
+        video.muted = false; // Try to unmute
+        video.play().then(() => {
+          statusText.innerText = "Video Playing (Background)";
+        }).catch((e) => {
+          // If unmute fails, try muted play
+          statusText.innerText = "Autoplay blocked. Trying muted.";
+          video.muted = true;
+          video.play();
+        });
       });
 
-      // Play/Pause Logic
+      // 2. DEBUG LOGGING (Just so you know it's working)
       const anchor = document.querySelector('#target-anchor');
       anchor.addEventListener("targetFound", event => {
-        console.log("Found");
-        video.muted = false;
-        video.play();
+        statusText.innerText = "Target Found: Visible";
       });
       anchor.addEventListener("targetLost", event => {
-        console.log("Lost");
-        video.pause();
+        statusText.innerText = "Target Lost: Hidden";
       });
     </script>
   </body>
